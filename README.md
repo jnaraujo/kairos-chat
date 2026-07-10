@@ -334,9 +334,6 @@ kairos-chat/
 │   │   └── peers_test.go # Testes de unidade do parser de parâmetros
 │   └── integration/
 │       └── integration_test.go # Simulação de concorrência massiva na malha P2P
-├── assets/
-│   ├── architecture.jpg  # Diagrama esquematizado dos componentes e rede P2P
-│   └── lifecycle.jpg     # Diagrama em 4 etapas do ciclo de vida da mensagem
 ├── Makefile              # Automação de compilação, limpeza e testes
 └── go.mod                # Arquivo do módulo Go
 ```
