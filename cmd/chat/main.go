@@ -31,9 +31,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Filter out the local node ID from peersMap if present to avoid self-connection loops
+	delete(peersMap, *localID)
+
 	var peersList []string
 	peersList = append(peersList, *localID)
-	peersList = append(peersList, parsedList...)
+	for _, id := range parsedList {
+		if id != *localID {
+			peersList = append(peersList, id)
+		}
+	}
 
 	onDeliver := func(msg engine.Packet) {
 		fmt.Printf("\n[%s]: %s\n> ", msg.NodeID, msg.Text)
