@@ -248,4 +248,31 @@ func TestNodeCrashAndRecovery(t *testing.T) {
 		t.Fatalf("Failed to deliver message after userB recovery. Deliveries: A=%v, B=%v, C=%v",
 			logA.Get(), logB2.Get(), logC.Get())
 	}
+
+	// Send new messages after recovery to test subsequent chat behavior
+	engA.LocalChat("Message from A after recovery")
+	engC.LocalChat("Message from C after recovery")
+
+	// Wait and verify both messages are delivered to everyone (total count should be 3 per node)
+	successPost := false
+	deadlinePost := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadlinePost) {
+		msgsA := logA.Get()
+		msgsC := logC.Get()
+		msgsB2 := logB2.Get()
+
+		if len(msgsA) == 3 && len(msgsC) == 3 && len(msgsB2) == 3 {
+			successPost = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if !successPost {
+		t.Logf("Node A waitQueue: %v", engA.GetPendingPackets())
+		t.Logf("Node C waitQueue: %v", engC.GetPendingPackets())
+		t.Logf("Node B2 waitQueue: %v", engB2.GetPendingPackets())
+		t.Fatalf("Failed to deliver post-recovery messages. Deliveries: A=%v, B=%v, C=%v",
+			logA.Get(), logB2.Get(), logC.Get())
+	}
 }

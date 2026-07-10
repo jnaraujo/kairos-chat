@@ -13,6 +13,7 @@ type ChatEngine struct {
 	localClock  int                        // Lamport Logical Clock
 	waitQueue   []Packet                   // Priority Queue for incoming messages
 	ackTable    map[string]map[string]bool // Message ID -> Set of Node IDs who sent ACK
+	delivered   map[string]bool            // Message ID -> bool (already delivered messages)
 
 	OnDeliver   func(m Packet)
 	OnBroadcast func(p Packet)
@@ -25,6 +26,7 @@ func NewChatEngine(localNodeID string, peers []string, onDeliver func(Packet), o
 		localClock:  0,
 		waitQueue:   make([]Packet, 0),
 		ackTable:    make(map[string]map[string]bool),
+		delivered:   make(map[string]bool),
 		OnDeliver:   onDeliver,
 		OnBroadcast: onBroadcast,
 	}
@@ -82,6 +84,22 @@ func (e *ChatEngine) LocalChat(text string) {
 // HandleIncomingChat is called when a CHAT packet is received from the network.
 func (e *ChatEngine) HandleIncomingChat(p Packet) {
 	e.mu.Lock()
+
+	// Ignore if already delivered to prevent duplicate insertions from sync replays.
+	// However, broadcast the ACK again in case some peer missed it due to reconnection races.
+	if e.delivered[p.MessageID] {
+		e.mu.Unlock()
+		ack := Packet{
+			Type:                "ACK",
+			NodeID:              e.localNodeID,
+			LogicalTimestamp:    e.localClock,
+			ReferencedMessageID: p.MessageID,
+		}
+		if e.OnBroadcast != nil {
+			e.OnBroadcast(ack)
+		}
+		return
+	}
 
 	// Update local clock: max(local, remote) + 1
 	if p.LogicalTimestamp > e.localClock {
@@ -157,6 +175,7 @@ func (e *ChatEngine) checkDelivery() {
 			e.OnDeliver(head)
 		}
 
+		e.delivered[head.MessageID] = true
 		e.waitQueue = e.waitQueue[1:]
 		// Cleanup the ACK entry to free memory
 		delete(e.ackTable, head.MessageID)
