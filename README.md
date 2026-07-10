@@ -95,9 +95,50 @@ graph TD
 ```
 
 ### 2.2. Diagrama de Arquitetura Esquematizado
-O diagrama abaixo ilustra a topologia de malha totalmente conectada entre três nós (`Node A`, `Node B` e `Node C`), evidenciando os três componentes locais fundamentais em cada nó (Relógio de Lamport, Fila de Prioridades e Tabela de Confirmações):
 
-![Arquitetura de Chat P2P Sincronizado com Relógios de Lamport](assets/architecture.jpg)
+O diagrama abaixo ilustra a topologia de malha totalmente conectada entre três nós (`Node A`, `Node B` e `Node C`), evidenciando os três componentes locais fundamentais do motor de consenso (Relógio de Lamport, Fila de Prioridades e Tabela de Confirmações) e a interconexão P2P via TCP:
+
+```mermaid
+graph TD
+    %% Nós e suas componentes internas
+    subgraph A ["Nó A (userA)"]
+        direction TB
+        CA["Relógio Lógico (Clock=2)"]
+        QA["Fila de Espera (waitQueue)"]
+        TA["Tabela de ACKs (ackTable)"]
+        NA["Socket TCP (Network)"]
+    end
+
+    subgraph B ["Nó B (userB)"]
+        direction TB
+        CB["Relógio Lógico (Clock=3)"]
+        QB["Fila de Espera (waitQueue)"]
+        TB["Tabela de ACKs (ackTable)"]
+        NB["Socket TCP (Network)"]
+    end
+
+    subgraph C ["Nó C (userC)"]
+        direction TB
+        CC["Relógio Lógico (Clock=4)"]
+        QC["Fila de Espera (waitQueue)"]
+        TC["Tabela de ACKs (ackTable)"]
+        NC["Socket TCP (Network)"]
+    end
+
+    %% Conexões de Rede P2P
+    NA <-->|Conexão TCP Bidirecional| NB
+    NB <-->|Conexão TCP Bidirecional| NC
+    NC <-->|Conexão TCP Bidirecional| NA
+
+    %% Estilos visuais
+    classDef nodeA fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef nodeB fill:#0f172a,stroke:#a855f7,stroke-width:2px,color:#f8fafc;
+    classDef nodeC fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    
+    class A,CA,QA,TA,NA nodeA;
+    class B,CB,QB,TB,NB nodeB;
+    class C,CC,QC,TC,NC nodeC;
+```
 
 ---
 
@@ -159,9 +200,48 @@ Esta função é executada de forma transacional (sob a proteção do Mutex) sem
    - Continua o loop para verificar se a próxima mensagem da fila também já possui todos os ACKs.
 
 ### 3.3. Ciclo de Vida da Mensagem e Consenso
-O diagrama abaixo ilustra passo a passo a jornada de uma mensagem, desde a sua concepção em um nó remetente até a sua exibição/entrega ordenada em todos os nós da rede:
 
-![Ciclo de Vida da Mensagem em Sistema Distribuído](assets/lifecycle.jpg)
+O diagrama abaixo ilustra o fluxo detalhado da jornada de uma mensagem no sistema P2P, desde a digitação inicial até o processamento de ACKs e entrega final:
+
+```mermaid
+flowchart TD
+    subgraph Remetente ["Nó Remetente"]
+        A["1. Usuário digita mensagem (LocalChat)"] --> B["Incrementa Relógio Lógico: Clock + 1"]
+        B --> C["Insere Mensagem na waitQueue"]
+        C --> D["Registra ACK local na ackTable"]
+        D --> E["Realiza Broadcast da Mensagem: Pacote CHAT"]
+    end
+
+    E -->|Rede TCP| F["Nó Receptor (Peer)"]
+
+    subgraph Receptor ["Nó Receptor"]
+        F --> G["Atualiza Relógio Lógico: max(Local, Mensagem) + 1"]
+        G --> H["Insere Mensagem na waitQueue"]
+        H --> I["Registra ACKs do Remetente e Local na ackTable"]
+        I --> J["Envia confirmação: Pacote ACK para todos"]
+    end
+
+    J -->|Rede TCP| K["Consenso em Todos os Nós"]
+
+    subgraph Consenso ["Consenso de Entrega (checkDelivery)"]
+        K --> L["Recebe e registra ACK na ackTable"]
+        L --> M{"Mensagem está no topo da waitQueue?"}
+        M -- Sim --> N{"Possui ACKs de todos os nós?"}
+        M -- Não --> O["Aguardar novas confirmações"]
+        N -- Sim --> P["Entrega mensagem ao usuário (OnDeliver)"]
+        N -- Não --> O
+        P --> Q["Remove da waitQueue e limpa ackTable"]
+    end
+
+    %% Estilos visuais do fluxograma
+    classDef step fill:#0f172a,stroke:#38bdf8,stroke-width:1px,color:#f8fafc;
+    classDef decision fill:#1e293b,stroke:#a855f7,stroke-width:2px,color:#f8fafc;
+    classDef final fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    
+    class A,B,C,D,E,F,G,H,I,J,K,L,O,Q step;
+    class M,N decision;
+    class P final;
+```
 
 ---
 
