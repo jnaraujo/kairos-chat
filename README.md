@@ -400,3 +400,14 @@ Para executar toda a suíte de testes de maneira limpa (ignorando o cache do Go 
 ```bash
 make test
 ```
+
+---
+
+## 9. Referências Bibliográficas
+
+* BREWER, Eric A. Towards robust distributed systems. In: **ACM Symposium on Principles of Distributed Computing (PODC)**. Portland, OR, EUA: ACM, 2000. p. 7. DOI: 10.1145/343477.343502.
+* GILBERT, Seth; LYNCH, Nancy. Brewer's conjecture and the feasibility of consistent, available, partition-tolerant web services. **ACM SIGACT News**, v. 33, n. 2, p. 51-59, jun. 2002. DOI: 10.1145/564585.564601.
+* GO TEAM. **The Go Programming Language Specification**. Google, 2026. Disponível em: <https://go.dev/ref/spec>. Acesso em: 10 jul. 2026.
+* LAMPORT, Leslie. Time, clocks, and the ordering of events in a distributed system. **Communications of the ACM**, v. 21, n. 7, p. 558-565, jul. 1978. DOI: 10.1145/359545.359563.
+* RICHARDS, Mark; FORD, Neal. **Fundamentos da Arquitetura de Software: Uma abordagem de engenharia**. Rio de Janeiro: Alta Books, 2021.
+* SCHNEIDER, Fred B. Implementing fault-tolerant services using the state machine approach: A tutorial. **ACM Computing Surveys (CSUR)**, v. 22, n. 4, p. 299-319, dez. 1990. DOI: 10.1145/98163.98167.
