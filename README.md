@@ -360,17 +360,17 @@ Abra três instâncias de terminais para simular a interação de três usuário
 
 **Terminal 1 (userA)**:
 ```bash
-./chat -id userA -addr localhost:8080 -peers userB=localhost:8081,userC=localhost:8082
+make run ID=userA ADDR=localhost:8080 PEERS=userB=localhost:8081,userC=localhost:8082
 ```
 
 **Terminal 2 (userB)**:
 ```bash
-./chat -id userB -addr localhost:8081 -peers userA=localhost:8080,userC=localhost:8082
+make run ID=userB ADDR=localhost:8081 PEERS=userA=localhost:8080,userC=localhost:8082
 ```
 
 **Terminal 3 (userC)**:
 ```bash
-./chat -id userC -addr localhost:8082 -peers userA=localhost:8080,userB=localhost:8081
+make run ID=userC ADDR=localhost:8082 PEERS=userA=localhost:8080,userB=localhost:8081
 ```
 
 *Nota*: Os nós irão iniciar e aguardar até que a malha esteja 100% estabelecida e conectada. Uma vez estabelecido o consenso de rede, a mensagem "Mesh fully connected!" será exibida nos três terminais. A partir desse momento, qualquer mensagem digitada e enviada será ordenada globalmente e replicada de forma consistente em todas as telas.

@@ -1,4 +1,4 @@
-.PHONY: all test build clean
+.PHONY: all test build clean run
 
 all: test
 
@@ -22,3 +22,11 @@ build:
 
 clean:
 	rm -f chat
+
+# Variáveis configuráveis para execução do chat
+ID ?= userA
+ADDR ?= localhost:8080
+PEERS ?= userB=localhost:8081,userC=localhost:8082
+
+run: build
+	./chat -id $(ID) -addr $(ADDR) -peers "$(PEERS)"
