@@ -302,12 +302,18 @@ A camada de rede em [pkg/network/network.go](file:///home/jnaraujo/code/kairos-c
 
 Como em qualquer sistema distribuído real, as escolhas de projeto envolvem trade-offs diretamente explicados pelo **Teorema CAP** (Consistência, Disponibilidade e Tolerância a Partições) e princípios de consistência forte:
 
-### 5.1. Preservação de Consistência sobre Disponibilidade (CP)
-O algoritmo de de ordenação total implementado prioriza a **Consistência** em detrimento da **Disponibilidade**.
+### 5.1. Preservação de Consistência sobre Disponibilidade (CP) e Recuperação de Nós
+O algoritmo de ordenação total implementado prioriza a **Consistência** em detrimento da **Disponibilidade**.
 
-Desse modo, o sistema garante que todos os nós vejam as mensagens na mesma ordem, mesmo que isso venha a bloquear a entrega de mensagens caso algum nó falhe ou fique isolado. Isso ocorre porque o critério de entrega de mensagens depende do recebimento de ACKs de **todos** os nós da rede. Se o nó `C` sumir, os nós `A` e `B` acumularão mensagens na `waitQueue` indefinidamente, sem nunca poder exibi-las na tela.
+Desse modo, o sistema garante que todos os nós vejam as mensagens na mesma ordem, mesmo que isso venha a bloquear a entrega de mensagens caso algum nó falhe ou fique isolado. Isso ocorre porque o critério de entrega de mensagens depende do recebimento de ACKs de **todos** os nós da rede. Se o nó `C` sumir, os nós `A` e `B` acumularão mensagens na `waitQueue` indefinidamente, sem poder exibi-las na tela.
 
-Como forma de solucionar esse problema, soluções industriais tolerantes a falhas utilizam algoritmos de consenso baseados em maioria simples (quórum), como **Raft** ou **Paxos**, em vez de exigir unanimidade global.
+**Mecanismo de Recuperação Concorrente**:
+Para mitigar a inatividade perpétua decorrente de falhas temporárias, o sistema implementa um protocolo de **Detecção de Desconexão, Reconexão Automática e Sincronização**:
+1. **Reconexão Ativa/Passiva**: Quando a interrupção de um socket TCP é detectada (fim de arquivo/read error no `readFromConn`), o nó que detém o menor ID alfabético na relação P2P reativa imediatamente a thread de tentativa de reconexão (`dialPeer`).
+2. **Sincronização de Estado (Replay)**: Ao restabelecer a conexão (seja via discagem ativa ou recebimento passivo de conexão), o nó executa de forma assíncrona a sincronização `syncPendingMessages`. Ele varre sua `waitQueue` local e retransmite para o peer recém-reconectado todos os pacotes do tipo `CHAT` pendentes, acompanhados de seus respectivos `ACKs` locais.
+3. **Restauração do Consenso**: O nó recuperado recebe as mensagens perdidas enquanto estava offline, insere-as ordenadamente na fila, emite seus próprios `ACKs` de resposta e atualiza seu `ackTable`. A recepção dessas confirmações tardias pelos demais nós destrava a entrega de todas as mensagens na `waitQueue`.
+
+Para mitigar a inatividade por quedas permanentes de longa duração, soluções industriais tolerantes a falhas utilizam algoritmos de consenso baseados em quórum simples (maioria), como **Raft** ou **Paxos**, em vez de exigir unanimidade global.
 
 ### 5.2. Canal de Comunicação Físico
 O algoritmo assume canais de transmissão confiáveis e ordenados localmente (FIFO). A implementação resolve isso nativamente delegando a transmissão física ao protocolo **TCP**, que realiza internamente o sequenciamento, controle de fluxo e retransmissão de pacotes. Caso o transporte fosse feito em UDP, seria necessário implementar sequenciamento adicional na camada de aplicação para satisfazer as premissas do algoritmo de Lamport.

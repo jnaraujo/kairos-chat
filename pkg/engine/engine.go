@@ -211,3 +211,13 @@ func (e *ChatEngine) ForceCheckDelivery() {
 	defer e.mu.Unlock()
 	e.checkDelivery()
 }
+
+// GetPendingPackets returns a copy of all packets in the waitQueue.
+func (e *ChatEngine) GetPendingPackets() []Packet {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	packets := make([]Packet, len(e.waitQueue))
+	copy(packets, e.waitQueue)
+	return packets
+}

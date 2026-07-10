@@ -166,3 +166,86 @@ func TestDistributedChatSimulation(t *testing.T) {
 			i, textA, msgsA[i].LogicalTimestamp, msgsA[i].NodeID)
 	}
 }
+
+func TestNodeCrashAndRecovery(t *testing.T) {
+	// TCP ports 18994, 18995, and 18996 allocated for recovery test
+	addrs := map[string]string{
+		"userA": "127.0.0.1:18994",
+		"userB": "127.0.0.1:18995",
+		"userC": "127.0.0.1:18996",
+	}
+
+	peersA := map[string]string{"userB": addrs["userB"], "userC": addrs["userC"]}
+	peersB := map[string]string{"userA": addrs["userA"], "userC": addrs["userC"]}
+	peersC := map[string]string{"userA": addrs["userA"], "userB": addrs["userB"]}
+
+	allPeersList := []string{"userA", "userB", "userC"}
+
+	logA := &DeliveredLog{}
+	logB := &DeliveredLog{}
+	logC := &DeliveredLog{}
+
+	engA := engine.NewChatEngine("userA", allPeersList, logA.Append, nil)
+	engB := engine.NewChatEngine("userB", allPeersList, logB.Append, nil)
+	engC := engine.NewChatEngine("userC", allPeersList, logC.Append, nil)
+
+	netA := network.NewNetwork("userA", addrs["userA"], peersA, engA)
+	netB := network.NewNetwork("userB", addrs["userB"], peersB, engB)
+	netC := network.NewNetwork("userC", addrs["userC"], peersC, engC)
+
+	defer netA.Close()
+	defer netC.Close()
+
+	var startWg sync.WaitGroup
+	startWg.Add(3)
+	go func() { defer startWg.Done(); _ = netA.Start() }()
+	go func() { defer startWg.Done(); _ = netB.Start() }()
+	go func() { defer startWg.Done(); _ = netC.Start() }()
+	startWg.Wait()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Simulate userB crash
+	netB.Close()
+	time.Sleep(200 * time.Millisecond)
+
+	// userA sends a message while userB is offline
+	engA.LocalChat("Message while B is offline")
+
+	// Wait to verify it's NOT delivered to anyone (since userB is offline and cannot ACK)
+	time.Sleep(500 * time.Millisecond)
+	if len(logA.Get()) > 0 || len(logC.Get()) > 0 {
+		t.Fatalf("Message delivered prematurely while userB was offline")
+	}
+
+	// Recover userB (simulate a fresh restart)
+	logB2 := &DeliveredLog{}
+	engB2 := engine.NewChatEngine("userB", allPeersList, logB2.Append, nil)
+	netB2 := network.NewNetwork("userB", addrs["userB"], peersB, engB2)
+	defer netB2.Close()
+
+	go func() { _ = netB2.Start() }()
+
+	// Wait for reconnection and delivery (should sync un-ACKed messages)
+	expectedText := "Message while B is offline"
+	deadline := time.Now().Add(5 * time.Second)
+	success := false
+	for time.Now().Before(deadline) {
+		msgsA := logA.Get()
+		msgsC := logC.Get()
+		msgsB2 := logB2.Get()
+
+		if len(msgsA) == 1 && len(msgsC) == 1 && len(msgsB2) == 1 {
+			if msgsA[0].Text == expectedText && msgsC[0].Text == expectedText && msgsB2[0].Text == expectedText {
+				success = true
+				break
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if !success {
+		t.Fatalf("Failed to deliver message after userB recovery. Deliveries: A=%v, B=%v, C=%v",
+			logA.Get(), logB2.Get(), logC.Get())
+	}
+}

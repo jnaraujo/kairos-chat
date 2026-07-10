@@ -111,6 +111,7 @@ func (n *Network) dialPeer(peerID, addr string) {
 					n.connections[peerID] = conn
 					n.mu.Unlock()
 
+					go n.syncPendingMessages(peerID, conn)
 					go n.readFromConn(peerID, conn)
 					return
 				}
@@ -152,6 +153,7 @@ func (n *Network) handleIncomingConn(conn net.Conn) {
 	n.connections[peerID] = conn
 	n.mu.Unlock()
 
+	go n.syncPendingMessages(peerID, conn)
 	n.readFromConn(peerID, conn)
 }
 
@@ -161,7 +163,12 @@ func (n *Network) readFromConn(peerID string, conn net.Conn) {
 		conn.Close()
 		n.mu.Lock()
 		delete(n.connections, peerID)
+		closed := n.isClosed
 		n.mu.Unlock()
+
+		if !closed && n.localNodeID < peerID {
+			go n.dialPeer(peerID, n.peers[peerID])
+		}
 	}()
 
 	reader := bufio.NewReader(conn)
@@ -216,5 +223,46 @@ func (n *Network) Close() {
 	}
 	for _, conn := range n.connections {
 		conn.Close()
+	}
+}
+
+// syncPendingMessages sends all currently waiting packets and their ACKs to a newly connected peer.
+func (n *Network) syncPendingMessages(peerID string, conn net.Conn) {
+	packets := n.engine.GetPendingPackets()
+	for _, p := range packets {
+		if p.Type == "CHAT" {
+			// 1. Send the CHAT packet
+			data, err := json.Marshal(p)
+			if err != nil {
+				continue
+			}
+			data = append(data, '\n')
+
+			n.mu.Lock()
+			// Send only if the connection is still active and matches
+			if activeConn, ok := n.connections[peerID]; ok && activeConn == conn {
+				_, _ = conn.Write(data)
+			}
+			n.mu.Unlock()
+
+			// 2. Send our own ACK for this message to the peer
+			ack := engine.Packet{
+				Type:                "ACK",
+				NodeID:              n.localNodeID,
+				LogicalTimestamp:    n.engine.GetClock(),
+				ReferencedMessageID: p.MessageID,
+			}
+			ackData, err := json.Marshal(ack)
+			if err != nil {
+				continue
+			}
+			ackData = append(ackData, '\n')
+
+			n.mu.Lock()
+			if activeConn, ok := n.connections[peerID]; ok && activeConn == conn {
+				_, _ = conn.Write(ackData)
+			}
+			n.mu.Unlock()
+		}
 	}
 }
